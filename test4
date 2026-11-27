@@ -1,0 +1,11 @@
+openssl x509 -in /usr/local/share/ca-certificates/proxy-ca.crt -noout -text | grep -i "CA Issuers"
+
+curl -x http://10.0.33.52:3128 -o /tmp/root.cer "АДРЕС_ИЗ_ШАГА_1"
+openssl x509 -in /tmp/root.cer -out /tmp/root.crt 2>/dev/null || openssl x509 -inform DER -in /tmp/root.cer -out /tmp/root.crt
+openssl x509 -in /tmp/root.crt -noout -subject -issuer
+
+sudo sh -c 'cat /tmp/root.crt >> /usr/local/share/ca-certificates/proxy-ca.crt' && sudo update-ca-certificates --fresh
+sudo -u signage env NODE_USE_ENV_PROXY=1 HTTPS_PROXY=http://10.0.33.52:3128 NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/proxy-ca.crt node -e "fetch('https://api.open-meteo.com/v1/forecast?latitude=56.36&longitude=41.31&current=temperature_2m').then(r=>r.text()).then(t=>console.log('OK',t.slice(0,80))).catch(e=>console.log('ERR',e.cause?.code||e.cause?.message||e.message))"
+
+sudo -u signage -H env PM2_HOME=/var/lib/signage/.pm2 NODE_USE_ENV_PROXY=1 HTTPS_PROXY=http://10.0.33.52:3128 HTTP_PROXY=http://10.0.33.52:3128 NO_PROXY=localhost,127.0.0.1,10.0.0.0/8,192.168.0.0/16,172.16.0.0/12 NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/proxy-ca.crt pm2 restart signage --update-env
+sudo -u signage -H env PM2_HOME=/var/lib/signage/.pm2 pm2 save
