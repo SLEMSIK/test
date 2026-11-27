@@ -19,3 +19,20 @@ sudo grep -rho "var WEATHER_URL = '[a-z]*://" /srv/signage-smb/share/html /var/l
 sudo -u signage env NODE_USE_ENV_PROXY=1 HTTP_PROXY=http://10.0.33.52:3128 node -e "fetch('http://api.open-meteo.com/v1/forecast?latitude=56.36&longitude=41.31&current=temperature_2m').then(r=>r.text()).then(t=>console.log('OK',t.slice(0,80))).catch(e=>console.log('ERR',e.cause?.code||e.cause?.message||e.message))"
 
 sudo -u signage -H env PM2_HOME=/var/lib/signage/.pm2 pm2 logs signage --lines 300 --nostream | grep -iE "proxy upstream|open-meteo" | tail -5
+
+
+
+$c = Get-ChildItem Cert:\CurrentUser\Root, Cert:\LocalMachine\Root | Where-Object Subject -like "*CA Root Social Objects*" | Select-Object -First 1; $c.Subject
+
+"-----BEGIN CERTIFICATE-----`r`n" + [Convert]::ToBase64String($c.RawData, 'InsertLineBreaks') + "`r`n-----END CERTIFICATE-----" | Set-Content -Encoding Ascii "$env:USERPROFILE\Desktop\rostelecom-root.crt"
+
+scp "$env:USERPROFILE\Desktop\rostelecom-root.crt" user@10.33.44.20:/tmp/root.crt
+
+
+openssl x509 -in /tmp/root.crt -noout -subject -issuer
+
+sudo sh -c 'cat /tmp/root.crt >> /usr/local/share/ca-certificates/proxy-ca.crt' && sudo update-ca-certificates --fresh
+
+sudo -u signage env NODE_USE_ENV_PROXY=1 HTTPS_PROXY=http://10.0.33.52:3128 NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/proxy-ca.crt node -e "fetch('https://api.open-meteo.com/v1/forecast?latitude=56.36&longitude=41.31&current=temperature_2m').then(r=>r.text()).then(t=>console.log('OK',t.slice(0,80))).catch(e=>console.log('ERR',e.cause?.code||e.cause?.message||e.message))"
+
+sudo -u signage -H env PM2_HOME=/var/lib/signage/.pm2 pm2 restart signage
