@@ -68,4 +68,8 @@ sudo -u signage -H env PM2_HOME=/var/lib/signage/.pm2 pm2 save
 EOF
 sudo chmod 755 /usr/local/bin/signage-restart
 
+
+
+curl -x http://10.0.33.52:3128 -sS -D - -o /tmp/body.txt "https://api.open-meteo.com/v1/forecast?latitude=56.36&longitude=41.31&current=temperature_2m"; echo "--- реально получено байт:"; wc -c < /tmp/body.txt; echo "--- начало ответа:"; head -c 400 /tmp/body.txt; echo
+
 sudo signage-restart
