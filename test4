@@ -11,3 +11,11 @@ sudo -u signage -H env PM2_HOME=/var/lib/signage/.pm2 NODE_USE_ENV_PROXY=1 HTTPS
 sudo -u signage -H env PM2_HOME=/var/lib/signage/.pm2 pm2 save
 
 sudo cat /proc/$(pgrep -f packages/server/dist/index.js | head -1)/environ | tr '\0' '\n' | grep -iE "proxy"
+
+
+
+sudo grep -rho "var WEATHER_URL = '[a-z]*://" /srv/signage-smb/share/html /var/lib/signage/local-media/html 2>/dev/null | sort | uniq -c
+
+sudo -u signage env NODE_USE_ENV_PROXY=1 HTTP_PROXY=http://10.0.33.52:3128 node -e "fetch('http://api.open-meteo.com/v1/forecast?latitude=56.36&longitude=41.31&current=temperature_2m').then(r=>r.text()).then(t=>console.log('OK',t.slice(0,80))).catch(e=>console.log('ERR',e.cause?.code||e.cause?.message||e.message))"
+
+sudo -u signage -H env PM2_HOME=/var/lib/signage/.pm2 pm2 logs signage --lines 300 --nostream | grep -iE "proxy upstream|open-meteo" | tail -5
