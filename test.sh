@@ -1,1 +1,1 @@
-curl -x http://10.0.33.52:3128 -sS "https://api.open-meteo.com/v1/forecast?latitude=56.36&longitude=41.31&current=temperature_2m"
+openssl s_client -proxy 10.0.33.52:3128 -connect api.open-meteo.com:443 -servername api.open-meteo.com -showcerts </dev/null 2>/dev/null | awk '/BEGIN CERT/{n++} n{c[n]=c[n] $0 "\n"} END{printf "%s", c[n]}' > /tmp/proxy-ca.crt
