@@ -1,0 +1,14 @@
+sudo cat /proc/$(pgrep -f packages/server/dist/index.js | head -1)/environ | tr '\0' '\n' | grep -iE "proxy|extra_ca"
+
+sudo -u signage -H env PM2_HOME=/var/lib/signage/.pm2 NODE_USE_ENV_PROXY=1 HTTPS_PROXY=http://10.0.33.52:3128 HTTP_PROXY=http://10.0.33.52:3128 NO_PROXY=localhost,127.0.0.1,10.0.0.0/8,192.168.0.0/16,172.16.0.0/12 NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/proxy-ca.crt pm2 delete signage
+
+sudo -u signage -H env PM2_HOME=/var/lib/signage/.pm2 NODE_USE_ENV_PROXY=1 HTTPS_PROXY=http://10.0.33.52:3128 HTTP_PROXY=http://10.0.33.52:3128 NO_PROXY=localhost,127.0.0.1,10.0.0.0/8,192.168.0.0/16,172.16.0.0/12 NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/proxy-ca.crt pm2 start /opt/signage/deploy/ecosystem.config.cjs
+
+sudo -u signage -H env PM2_HOME=/var/lib/signage/.pm2 pm2 save
+
+
+
+
+sudo -u signage env NODE_USE_ENV_PROXY=1 HTTPS_PROXY=http://10.0.33.52:3128 NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/proxy-ca.crt node -e "fetch('https://api.open-meteo.com/v1/forecast?latitude=56.36&longitude=41.31&current=temperature_2m').then(r=>r.text()).then(t=>console.log('OK',t.slice(0,80))).catch(e=>console.log('ERR',e.cause?.code||e.cause?.message||e.message))"
+
+sudo -u signage -H env PM2_HOME=/var/lib/signage/.pm2 pm2 logs signage --lines 80 --nostream | grep -iE "proxy|error" | tail -10
