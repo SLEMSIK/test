@@ -1,0 +1,11 @@
+sudo cp /tmp/proxy-ca.crt /usr/local/share/ca-certificates/proxy-ca.crt && sudo update-ca-certificates
+
+curl -x http://10.0.33.52:3128 -sS "https://api.open-meteo.com/v1/forecast?latitude=56.36&longitude=41.31&current=temperature_2m"
+
+echo "NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/proxy-ca.crt" | sudo tee -a /etc/environment
+
+sudo -u signage -H env PM2_HOME=/var/lib/signage/.pm2 NODE_USE_ENV_PROXY=1 HTTPS_PROXY=http://10.0.33.52:3128 HTTP_PROXY=http://10.0.33.52:3128 NO_PROXY=localhost,127.0.0.1,10.0.0.0/8,192.168.0.0/16,172.16.0.0/12 NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/proxy-ca.crt pm2 restart signage --update-env
+
+sudo -u signage -H env PM2_HOME=/var/lib/signage/.pm2 pm2 save
+
+sudo -u signage -H env PM2_HOME=/var/lib/signage/.pm2 pm2 env 0 | grep -iE "proxy|extra_ca"
