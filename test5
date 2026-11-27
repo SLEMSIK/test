@@ -1,0 +1,74 @@
+sudo tee /etc/signage/curl-fetch.cjs > /dev/null <<'EOF'
+// Signage: внешние GET-запросы через curl (школьный прокси несовместим со встроенным fetch Node.js).
+'use strict';
+const { execFile } = require('node:child_process');
+const origFetch = globalThis.fetch;
+const PROXY = process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy;
+const MARK = '\n__SIGNAGE_CURL__';
+function isLocalHost(host) {
+  return host === 'localhost' || /^(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host);
+}
+globalThis.fetch = function (input, init) {
+  init = init || {};
+  let url;
+  try { url = new URL(typeof input === 'string' || input instanceof URL ? String(input) : input.url); }
+  catch { return origFetch(input, init); }
+  const method = String(init.method || (input && input.method) || 'GET').toUpperCase();
+  if (!PROXY || method !== 'GET' || !/^https?:$/.test(url.protocol) || isLocalHost(url.hostname)) return origFetch(input, init);
+  return new Promise((resolve, reject) => {
+    const headers = new Headers(init.headers || {});
+    const args = ['-sS', '--proxy', PROXY, '--max-time', '20', '--compressed', '-o', '-',
+      '-w', MARK + '%{http_code} %{redirect_url}' + MARK + '%{content_type}'];
+    for (const [k, v] of headers) if (k !== 'accept-encoding') args.push('-H', `${k}: ${v}`);
+    args.push('--', url.href);
+    const child = execFile('curl', args, { encoding: 'buffer', maxBuffer: 20 * 1024 * 1024 }, (err, stdout, stderr) => {
+      if (init.signal) init.signal.removeEventListener('abort', onAbort);
+      if (err) {
+        const e = new TypeError('fetch failed');
+        e.cause = new Error(String(stderr || err.message).trim() || 'curl failed');
+        return reject(e);
+      }
+      const text = stdout.toString('latin1');
+      const i = text.lastIndexOf(MARK);
+      const j = text.lastIndexOf(MARK, i - 1);
+      if (i < 0 || j < 0) return reject(new TypeError('fetch failed: bad curl output'));
+      const body = stdout.subarray(0, Buffer.byteLength(text.slice(0, j), 'latin1'));
+      const [code, redirect] = text.slice(j + MARK.length, i).split(' ');
+      const contentType = text.slice(i + MARK.length);
+      const status = Number(code) || 502;
+      const h = new Headers();
+      if (contentType) h.set('content-type', contentType);
+      if (redirect) h.set('location', redirect);
+      const nullBody = status === 204 || status === 304 || (status >= 100 && status < 200);
+      resolve(new Response(nullBody ? null : body, { status: status < 200 ? 502 : status, headers: h }));
+    });
+    function onAbort() {
+      child.kill('SIGKILL');
+      reject(init.signal.reason || new DOMException('The operation was aborted', 'AbortError'));
+    }
+    if (init.signal) {
+      if (init.signal.aborted) return onAbort();
+      init.signal.addEventListener('abort', onAbort, { once: true });
+    }
+  });
+};
+EOF
+sudo chmod 644 /etc/signage/curl-fetch.cjs
+
+
+
+sudo -u signage env NODE_OPTIONS=--require=/etc/signage/curl-fetch.cjs HTTPS_PROXY=http://10.0.33.52:3128 node -e "fetch('https://api.open-meteo.com/v1/forecast?latitude=56.36&longitude=41.31&current=temperature_2m').then(r=>r.text()).then(t=>console.log('OK',t.slice(0,80))).catch(e=>console.log('ERR',e.cause?.message||e.message))"
+
+sudo tee /usr/local/bin/signage-restart > /dev/null <<'EOF'
+#!/bin/sh
+# Перезапуск Signage: внешние запросы через curl и школьный прокси
+sudo -u signage -H env PM2_HOME=/var/lib/signage/.pm2 \
+  NODE_OPTIONS=--require=/etc/signage/curl-fetch.cjs \
+  HTTPS_PROXY=http://10.0.33.52:3128 HTTP_PROXY=http://10.0.33.52:3128 \
+  NO_PROXY=localhost,127.0.0.1,10.0.0.0/8,192.168.0.0/16,172.16.0.0/12 \
+  pm2 restart signage --update-env
+sudo -u signage -H env PM2_HOME=/var/lib/signage/.pm2 pm2 save
+EOF
+sudo chmod 755 /usr/local/bin/signage-restart
+
+sudo signage-restart
